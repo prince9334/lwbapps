@@ -6,11 +6,19 @@ import { NavMenu } from "@shopify/app-bridge-react";
 import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
 
 import { authenticate } from "../shopify.server";
+import db from "../db.server";
 
 export const links = () => [{ rel: "stylesheet", href: polarisStyles }];
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  await authenticate.admin(request);
+  const { session } = await authenticate.admin(request);
+
+  // Sync Shop model to ensure accessToken is always fresh
+  await db.shop.upsert({
+    where: { shopDomain: session.shop },
+    update: { accessToken: session.accessToken },
+    create: { shopDomain: session.shop, accessToken: session.accessToken! },
+  });
 
   return { apiKey: process.env.SHOPIFY_API_KEY || "" };
 };
@@ -21,10 +29,14 @@ export default function App() {
   return (
     <AppProvider isEmbeddedApp apiKey={apiKey}>
       <NavMenu>
-        <Link to="/app" rel="home">
-          Home
-        </Link>
-        <Link to="/app/additional">Additional page</Link>
+        <Link to="/app" rel="home">Dashboard</Link>
+        <Link to="/app/products">Product Options</Link>
+        <Link to="/app/option-sets">Templates</Link>
+        <Link to="/app/import">Import/Migration</Link>
+        <Link to="/app/settings">Settings</Link>
+        <Link to="/app/logs">Backups</Link>
+        <Link to="/app/additional">F.A.Q.</Link>
+        <Link to="/app/additional">Support</Link>
       </NavMenu>
       <Outlet />
     </AppProvider>

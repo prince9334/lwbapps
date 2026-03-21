@@ -1,0 +1,11 @@
+query CartTransformRunInput {
+  cart {
+    lines {
+      id
+      quantity
+      attribute(key: "_config_price_adjustment") {
+        value
+      }
+    }
+  }
+}

@@ -1,18 +1,16 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+// Prisma schema — DPO Dynamic Product Options replica
+// Updated: Phase 1 schema migration
 
 generator client {
   provider = "prisma-client-js"
 }
 
-// Note that some adapters may set a maximum length for the String type by default, please ensure your strings are long
-// enough when changing adapters.
-// See https://www.prisma.io/docs/orm/reference/prisma-schema-reference#string for more information
 datasource db {
   provider = "sqlite"
   url      = "file:dev.sqlite"
 }
 
+// ── Shopify session storage (required by @shopify/shopify-app-remix) ──────────
 model Session {
   id                  String    @id
   shop                String
@@ -31,4 +29,305 @@ model Session {
   emailVerified       Boolean?  @default(false)
   refreshToken        String?
   refreshTokenExpires DateTime?
+}
+
+// ── Installed Shopify shops ───────────────────────────────────────────────────
+model Shop {
+  id             String         @id @default(cuid())
+  shopDomain     String         @unique
+  accessToken    String
+  installedAt    DateTime       @default(now())
+  products       Product[]
+  optionSets     OptionSet[]
+  customerGroups CustomerGroup[]
+  settings       ShopSettings?
+  jobs           Job[]
+}
+
+model Job {
+  id          String   @id @default(cuid())
+  shopId      String
+  type        String   // e.g., "magento-import"
+  status      String   @default("pending") // pending | processing | completed | failed
+  totalItems  Int      @default(0)
+  processed   Int      @default(0)
+  errors      Int      @default(0)
+  message     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  shop        Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+}
+
+// ── Per-shop design / behavior settings ──────────────────────────────────────
+model ShopSettings {
+  id               String   @id @default(cuid())
+  shopId           String   @unique
+  swatchShape      String   @default("square")   // circle | square
+  swatchSize       Int      @default(36)
+  swatchSpacing    Int      @default(6)
+  borderWidth      Int      @default(2)
+  borderColor      String   @default("#e1e3e5")
+  tooltipBehavior  String   @default("hover")    // hover | click
+  tooltipDelay     Int      @default(300)
+  customCss        String?
+  updatedAt        DateTime @updatedAt
+  shop             Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+}
+
+// ── Customer groups for field-level visibility ────────────────────────────────
+model CustomerGroup {
+  id        String   @id @default(cuid())
+  shopId    String
+  name      String
+  tags      String   // JSON array of Shopify customer tags
+  createdAt DateTime @default(now())
+  shop      Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+}
+
+// ── Products linked to Shopify product IDs ────────────────────────────────────
+model Product {
+  id               String          @id @default(cuid())
+  shopId           String
+  shopifyProductId String
+  title            String
+  basePrice        Float           @default(0)
+  status           String          @default("active")
+  engravingRate    Float           @default(5)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  shop             Shop            @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  sections         Section[]
+  calculations     Calculation[]
+  variantCache     VariantCache[]
+  configurations   Configuration[]
+  // Legacy (kept for backward compat during migration)
+  attributes       Attribute[]
+  pricingRules     PricingRule[]
+
+  @@unique([shopId, shopifyProductId])
+}
+
+// ── DPO Section — groups fields; top-level container ─────────────────────────
+model Section {
+  id            String   @id @default(cuid())
+  productId     String
+  label         String   @default("Section")
+  // visibility: visible | hidden
+  visibility    String   @default("visible")
+  // makeIt: visible | hidden (target state controlled by condition)
+  makeIt        String   @default("hidden")
+  // conditionJson: JSON | null — IF rules that toggle visibility
+  conditionJson String?
+  // layout
+  columns       Int      @default(3)
+  rows          Int      @default(3)
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  product       Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  fields        Field[]
+}
+
+// ── DPO Field — individual option inside a section ───────────────────────────
+model Field {
+  id             String       @id @default(cuid())
+  sectionId      String
+  // Field type enum
+  // input | textarea | number | date | dropdown | radio | checkbox
+  // color_swatch | image_swatch | file_upload | range_slider | step_counter
+  type           String       @default("input")
+  title          String
+  fieldCode      String       @default("")   // short code for SKU generation
+  price          Float        @default(0)
+  priceType      String       @default("fixed") // fixed | percentage
+  sku            String?
+  required       Boolean      @default(false)
+  defaultValue   String?
+  // Validation: none | email | url | number | custom_regex
+  validation     String?
+  maxLength      Int?         // null = unlimited
+  // Customer group visibility — JSON array of CustomerGroup IDs, null = all
+  customerGroups String?
+  // Conditional logic: JSON { field_id, operator, value, action: show|hide }
+  conditionJson  String?
+  // visibility: visible | hidden (default state before condition eval)
+  visibility     String       @default("visible")
+  makeIt         String       @default("hidden")
+  tooltip        String?
+  cssClass       String?
+  htmlAttributes String?
+  // Hide SKU from cart/order line item properties
+  hideSkuInCart  Boolean      @default(false)
+  // Hide field label when focused (useful for text inputs)
+  hideOnFocus    Boolean      @default(false)
+  sortOrder      Int          @default(0)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  section        Section      @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  values         FieldValue[]
+  rules          FieldRule[]
+}
+
+// ── FieldValue — choices for dropdown / radio / checkbox / swatch fields ──────
+model FieldValue {
+  id            String   @id @default(cuid())
+  fieldId       String
+  label         String
+  value         String
+  priceModifier Float    @default(0)
+  priceType     String   @default("fixed") // fixed | percentage
+  skuModifier   String?
+  imageUrl      String?
+  colorHex      String?  // for color_swatch
+  sortOrder     Int      @default(0)
+  isDefault     Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  field         Field    @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+}
+
+// ── FieldRule — per-field conditional logic ───────────────────────────────────
+model FieldRule {
+  id             String   @id @default(cuid())
+  fieldId        String   // the field that OWNS this rule (source)
+  // Condition
+  conditionFieldId String  // the field being checked
+  operator       String   // = | != | > | < | >= | <= | contains | not_contains | is_empty | is_not_empty
+  conditionValue String?
+  // Action
+  actionType     String   // show | hide | enable | disable | set_value | add_price | remove_price
+  actionTarget   String   // field ID or "self"
+  actionValue    String?
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+  field          Field    @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+}
+
+// ── VariantCache — maps config hash → Shopify variant ID ─────────────────────
+model VariantCache {
+  id               String   @id @default(cuid())
+  productId        String
+  configHash       String   @unique  // SHA256 of productId + sorted selections JSON
+  shopifyVariantId String
+  price            Float
+  sku              String?
+  createdAt        DateTime @default(now())
+  lastUsed         DateTime @default(now())
+  product          Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+// ── Formula calculations attached to a product ───────────────────────────────
+model Calculation {
+  id        String   @id @default(cuid())
+  productId String
+  name      String
+  formula   String   // e.g. "engraving_length * 5"
+  variables String?  // JSON: list of variable names referenced
+  createdAt DateTime @default(now())
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+// ── Named option sets (templates) ────────────────────────────────────────────
+model OptionSet {
+  id          String              @id @default(cuid())
+  shopId      String
+  name        String
+  displayMode String              @default("classic") // classic | multi_step
+  status      String              @default("active")
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  shop        Shop                @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  assignments ProductAssignment[]
+}
+
+// ── Links an OptionSet to a Shopify product ───────────────────────────────────
+model ProductAssignment {
+  id               String    @id @default(cuid())
+  optionSetId      String
+  shopifyProductId String
+  assignmentType   String    @default("manual") // manual | automatic
+  createdAt        DateTime  @default(now())
+  optionSet        OptionSet @relation(fields: [optionSetId], references: [id], onDelete: Cascade)
+
+  @@unique([optionSetId, shopifyProductId])
+}
+
+// ── Saved user configurations (for analytics / order reference) ───────────────
+model Configuration {
+  id                String   @id @default(cuid())
+  productId         String
+  shopifyOrderId    String?
+  configurationJson String
+  price             Float
+  createdAt         DateTime @default(now())
+  product           Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+// ── Detailed logs ─────────────────────────────────────────────────────────────
+model Log {
+  id        String   @id @default(cuid())
+  level     String   @default("info") // info | error | warn
+  message   String
+  details   String?
+  shop      String?
+  createdAt DateTime @default(now())
+}
+
+// ── LEGACY models (kept for backward compat) ──────────────────────────────────
+model Attribute {
+  id          String           @id @default(cuid())
+  productId   String
+  name        String
+  type        String
+  displayType String           @default("dropdown")
+  isRequired  Boolean          @default(false)
+  sortOrder   Int              @default(0)
+  createdAt   DateTime         @default(now())
+  product     Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
+  values      AttributeValue[]
+}
+
+model AttributeValue {
+  id             String    @id @default(cuid())
+  attributeId    String
+  value          String
+  label          String
+  priceModifier  Float     @default(0)
+  imageUrl       String?
+  skuModifier    String?
+  weightModifier Float?    @default(0)
+  sortOrder      Int       @default(0)
+  metadata       String?
+  createdAt      DateTime  @default(now())
+  attribute      Attribute @relation(fields: [attributeId], references: [id], onDelete: Cascade)
+}
+
+model PricingRule {
+  id            String   @id @default(cuid())
+  productId     String
+  name          String   @default("Rule")
+  conditions    String
+  priceModifier Float
+  ruleType      String   @default("add")
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  product       Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+// ── Jewelry-specific pricing tables ──────────────────────────────────────────
+model Metal {
+  id           String   @id @default(cuid())
+  material     String   @unique
+  density      Float
+  pricePerGram Float
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model StonePrice {
+  id            String   @id @default(cuid())
+  minCarat      Float
+  maxCarat      Float
+  pricePerCarat Float
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }

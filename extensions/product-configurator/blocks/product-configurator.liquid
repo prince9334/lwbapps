@@ -1,0 +1,43 @@
+{% comment %}
+  Product Configurator App Block
+  Install via: Online Store > Themes > Customize > Product page > Add Block
+{% endcomment %}
+
+{{ 'configurator.css' | asset_url | stylesheet_tag }}
+
+<div
+  id="product-configurator-{{ block.id }}"
+  data-configurator
+  data-product-id="{% if block.settings.configurator_product_id != blank %}{{ block.settings.configurator_product_id }}{% else %}{{ product.id }}{% endif %}"
+  data-variant-id="{{ product.selected_or_first_available_variant.id }}"
+  data-shop-domain="{{ shop.permanent_domain }}"
+>
+  <div class="cpc-loading">Loading product configurator...</div>
+</div>
+
+  <script>
+    window.CONFIGURATOR_APP_HOST = "/apps/configurator-api";
+    window.CONFIGURATOR_PRODUCT_ID = "{{ product.id }}";
+    (function() {
+      var el = document.getElementById("product-configurator-{{ block.id }}");
+      if (el && !el.dataset.productId && window.CONFIGURATOR_PRODUCT_ID) {
+        el.dataset.productId = window.CONFIGURATOR_PRODUCT_ID;
+      }
+    })();
+  </script>
+  <script src="{{ 'configurator.js' | asset_url }}" defer></script>
+
+{% schema %}
+{
+  "name": "Product Configurator",
+  "target": "section",
+  "settings": [
+    {
+      "type": "text",
+      "id": "configurator_product_id",
+      "label": "Configurator Product ID (Optional)",
+      "info": "Leave blank to automatically use the current page's product. If manual: copy 'Storefront widget ID' from app."
+    }
+  ]
+}
+{% endschema %}

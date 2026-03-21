@@ -2,11 +2,12 @@
 
 client_id = "c629aa4e869d650bc3a8ff4e87ffe071"
 name = "testing"
-application_url = "https://mat-seventh-brands-hiking.trycloudflare.com"
+application_url = "https://divorce-checks-journalist-scuba.trycloudflare.com"
 embedded = true
 
 [build]
 automatically_update_urls_on_dev = true
+include_config_on_deploy = true
 
 [webhooks]
 api_version = "2024-04"
@@ -29,10 +30,11 @@ scopes = "read_products,write_draft_orders,write_products"
 
 [auth]
 redirect_urls = [
-  "https://mat-seventh-brands-hiking.trycloudflare.com/api/auth"
+  "https://divorce-checks-journalist-scuba.trycloudflare.com/auth/callback",
+  "https://divorce-checks-journalist-scuba.trycloudflare.com/api/auth"
 ]
 
 [app_proxy]
-url = "https://mat-seventh-brands-hiking.trycloudflare.com"
+url = "https://divorce-checks-journalist-scuba.trycloudflare.com"
 subpath = "configurator-api"
 prefix = "apps"

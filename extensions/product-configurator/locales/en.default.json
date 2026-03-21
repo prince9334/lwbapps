@@ -1,0 +1,13 @@
+{
+  "product_configurator": {
+    "title": "Product Configurator",
+    "add_to_cart": "Add to Cart",
+    "loading": "Loading configurator...",
+    "error": "Configuration not available.",
+    "total_price": "Total Price",
+    "engraving_cost": "Engraving",
+    "characters": "characters",
+    "processing": "Processing...",
+    "select_option": "Select"
+  }
+}

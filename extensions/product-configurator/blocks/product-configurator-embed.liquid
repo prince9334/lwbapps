@@ -1,0 +1,41 @@
+{% comment %}
+  Product Configurator Global Embed
+  Allows the app to show up in the "App embeds" tab.
+  This will automatically inject the configurator if it's a product page.
+{% endcomment %}
+
+{% if template.name == 'product' %}
+  {{ 'configurator.css' | asset_url | stylesheet_tag }}
+
+  <div
+    id="cpc-embed-container"
+    data-configurator
+    data-product-id="{{ product.id }}"
+    data-variant-id="{{ product.selected_or_first_available_variant.id }}"
+    data-shop-domain="{{ shop.permanent_domain }}"
+  >
+    <div class="cpc-loading">Loading product configurator...</div>
+  </div>
+
+  <script>
+    window.CONFIGURATOR_APP_HOST = "/apps/configurator-api";
+    // Ensure product ID is available even if the HTML attribute is empty
+    window.CONFIGURATOR_PRODUCT_ID = "{{ product.id }}";
+    // Patch the element's dataset with the correct productId at runtime
+    (function() {
+      var el = document.getElementById("cpc-embed-container");
+      if (el && !el.dataset.productId && window.CONFIGURATOR_PRODUCT_ID) {
+        el.dataset.productId = window.CONFIGURATOR_PRODUCT_ID;
+      }
+    })();
+  </script>
+  <script src="{{ 'configurator.js' | asset_url }}" defer></script>
+{% endif %}
+
+{% schema %}
+{
+  "name": "Configurator (Global)",
+  "target": "body",
+  "settings": []
+}
+{% endschema %}
