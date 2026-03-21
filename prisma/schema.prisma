@@ -42,6 +42,16 @@ model Shop {
   customerGroups CustomerGroup[]
   settings       ShopSettings?
   jobs           Job[]
+  logs           Log[]
+}
+
+model Log {
+  id        String   @id @default(cuid())
+  shopId    String
+  message   String
+  level     String   @default("info") // info | error | warn
+  createdAt DateTime @default(now())
+  shop      Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
 }
 
 model Job {
@@ -260,16 +270,6 @@ model Configuration {
   price             Float
   createdAt         DateTime @default(now())
   product           Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-}
-
-// ── Detailed logs ─────────────────────────────────────────────────────────────
-model Log {
-  id        String   @id @default(cuid())
-  level     String   @default("info") // info | error | warn
-  message   String
-  details   String?
-  shop      String?
-  createdAt DateTime @default(now())
 }
 
 // ── LEGACY models (kept for backward compat) ──────────────────────────────────

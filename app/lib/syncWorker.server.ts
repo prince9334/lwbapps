@@ -63,8 +63,9 @@ export async function startMagentoImport(shopId: string, shopDomain: string) {
 
         if (endIndex !== -1) {
           const productJson = buffer.slice(startIndex, endIndex + 1);
+          let product: any = null;
           try {
-            const product = JSON.parse(productJson);
+            product = JSON.parse(productJson);
             
             if (product.type_id === "configurable") {
               console.log(`[Sync] Found Configurable: ${product.sku}. Syncing...`);
@@ -86,6 +87,15 @@ export async function startMagentoImport(shopId: string, shopDomain: string) {
           } catch (err: any) {
             console.error(`[Sync] Error processing element: ${err.message}`);
             errorCount++;
+            
+            // Log error to database for visibility
+            await db.log.create({
+              data: {
+                shopId,
+                message: `Sync Error for ${product?.sku || 'unknown'}: ${err.message}`,
+                level: "error"
+              }
+            }).catch(() => {}); // Ignore logging failures
           }
           
           buffer = buffer.slice(endIndex + 1);
@@ -167,8 +177,7 @@ async function processProductSync(p: any, shopId: string, shopDomain: string, ad
           title: p.name || `Magento Product ${p.sku}`,
           handle: handle,
           vendor: "Magento Migration",
-          status: "DRAFT", // Start as draft for safety
-          variants: [{ sku: p.sku, price: p.price || "0" }]
+          status: "DRAFT" // Start as draft for safety
         }
       }
     });
